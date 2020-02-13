@@ -6,12 +6,13 @@ export IMAGE_NAME=freundallein/schooner:latest
 init:
 	git config core.hooksPath .githooks
 run:
-	go run main.go
+	go run schooner.go
 test:
 	go test -cover ./...
 build:
-	make test
 	CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -a -o $$BIN_DIR/schooner
+build-healthchecker:
+	cd healthchecker && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -a -o ../$$BIN_DIR/healthchecker
 dockerbuild:
 	make test
 	docker build -t $$IMAGE_NAME -f Dockerfile .
