@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/freundallein/schooner/corridgen"
 	"github.com/freundallein/schooner/loadbalancer"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -56,6 +57,8 @@ func New(options *Options) (*Server, error) {
 		bucket.AddTarget(trg)
 		log.Printf("[config] target %s added\n", target)
 	}
+	go bucket.RunServices(options.StaleTimeout)
+	gen := corridgen.New(uint8(options.MachineID))
 
 	mux := http.NewServeMux()
 	mux.Handle("/schooner/metrics", promhttp.Handler())
@@ -65,6 +68,7 @@ func New(options *Options) (*Server, error) {
 	})
 	mux.Handle("/", MiddlewareChain(
 		bucket,
+		EnrichCorrelationID(gen),
 		AccessLog,
 	))
 	return &Server{options: options, mux: mux}, nil
