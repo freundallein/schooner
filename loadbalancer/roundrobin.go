@@ -50,7 +50,6 @@ func (buck *RoundRobinBucket) ServeHTTP(w http.ResponseWriter, r *http.Request) 
 	}
 	log.Println("[loadbalancer] choose", trg.Address())
 	proxy := trg.ReverseProxy()
-	// log.Println("[proxy] to", trg.Address())
 	proxy.ServeHTTP(w, r)
 	return
 }
@@ -127,29 +126,37 @@ func (buck *RoundRobinBucket) RemoveStale(timeout time.Duration) {
 // Count attempts for each request
 func (buck *RoundRobinBucket) getErrHandler(trg Target) func(w http.ResponseWriter, r *http.Request, e error) {
 	return func(w http.ResponseWriter, r *http.Request, e error) {
-		attempts := GetAttemptsFromContext(r)
-		if attempts > maxAttempts {
-			log.Printf("[attempt] %s (%s) Too much attempts, refusing\n", r.RemoteAddr, r.URL.Path)
-			http.Error(w, ErrTargetUnavailable.Error(), http.StatusServiceUnavailable)
-			return
-		}
-		log.Printf("[loadbalancer] %s %s\n", trg.Address(), e.Error())
-		retries := GetRetriesFromContext(r)
-		proxy := trg.ReverseProxy()
-		if retries < maxRetries {
-			select {
-			case <-time.After(10 * time.Millisecond):
-				ctx := context.WithValue(r.Context(), RetriesKey, retries+1)
-
-				log.Printf("[retry] %s (%s) Retrying server %d\n", r.RemoteAddr, r.URL.Path, attempts)
-				proxy.ServeHTTP(w, r.WithContext(ctx))
+		ctx := r.Context()
+		select {
+		case <-time.After(50 * time.Millisecond):
+			attempts := GetAttemptsFromContext(r)
+			if attempts > maxAttempts {
+				log.Printf("[attempt] %s (%s) Too much attempts, refusing\n", r.RemoteAddr, r.URL.Path)
+				http.Error(w, ErrTargetUnavailable.Error(), http.StatusServiceUnavailable)
+				return
 			}
-			return
+			log.Printf("[loadbalancer] %s %s\n", trg.Address(), e.Error())
+			retries := GetRetriesFromContext(r)
+			proxy := trg.ReverseProxy()
+			if retries < maxRetries {
+				select {
+				case <-time.After(10 * time.Millisecond):
+					ctx := context.WithValue(r.Context(), RetriesKey, retries+1)
+
+					log.Printf("[retry] %s (%s) Retrying server %d\n", r.RemoteAddr, r.URL.Path, attempts)
+					proxy.ServeHTTP(w, r.WithContext(ctx))
+				}
+				return
+			}
+			trg.SetAvailable(false)
+			log.Printf("[attempt] %s (%s) Attempting server %d\n", r.RemoteAddr, r.URL.Path, attempts)
+			ctx := context.WithValue(r.Context(), AttemptsKey, attempts+1)
+			buck.ServeHTTP(w, r.WithContext(ctx))
+
+		case <-ctx.Done():
+			log.Println("[loadbalancer] context canceled", trg.Address())
 		}
-		trg.SetAvailable(false)
-		log.Printf("[attempt] %s (%s) Attempting server %d\n", r.RemoteAddr, r.URL.Path, attempts)
-		ctx := context.WithValue(r.Context(), AttemptsKey, attempts+1)
-		buck.ServeHTTP(w, r.WithContext(ctx))
+
 	}
 }
 
