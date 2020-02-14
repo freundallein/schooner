@@ -1,7 +1,6 @@
 package httpserv
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
@@ -54,14 +53,13 @@ func TestHealthz(t *testing.T) {
 	if string(body) != "OK" {
 		t.Error("Expected OK got", string(body))
 	}
-	fmt.Println(string(body))
 }
 func TestMetrics(t *testing.T) {
 	srv, err := New(&Options{})
 	if err != nil {
 		t.Error(err.Error())
 	}
-	req, err := http.NewRequest("GET", "/metrics", nil)
+	req, err := http.NewRequest("GET", "/schooner/metrics", nil)
 	if err != nil {
 		t.Error(err)
 	}
@@ -73,8 +71,7 @@ func TestMetrics(t *testing.T) {
 	}
 }
 
-// Temporary test
-func TestIndex(t *testing.T) {
+func TestIndexNoTargets(t *testing.T) {
 	srv, err := New(&Options{})
 	if err != nil {
 		t.Error(err.Error())
@@ -85,8 +82,8 @@ func TestIndex(t *testing.T) {
 	}
 	rec := httptest.NewRecorder()
 	srv.mux.ServeHTTP(rec, req)
-	if status := rec.Code; status != http.StatusOK {
+	if status := rec.Code; status != http.StatusInternalServerError {
 		t.Errorf("handler returned wrong status code: got %v expected %v",
-			status, http.StatusOK)
+			status, http.StatusInternalServerError)
 	}
 }

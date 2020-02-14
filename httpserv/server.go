@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/freundallein/schooner/loadbalancer"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -16,12 +17,20 @@ var (
 
 // Options - fileserver parameters
 type Options struct {
-	Port string
+	Port         string
+	Targets      []string
+	StaleTimeout int
+	MachineID    int
+	UseCache     int
+	CacheExpire  int
 }
 
 // String - simple representation
 func (opts *Options) String() string {
-	return fmt.Sprintf("PORT=%s", opts.Port)
+	return fmt.Sprintf(
+		"PORT=%s, TARGETS=%s, STALE_TIMEOUT=%d, MACHINE_ID=%d, USE_CACHE=%d, CACHE_EXPIRE=%d",
+		opts.Port, opts.Targets, opts.StaleTimeout, opts.MachineID, opts.UseCache, opts.CacheExpire,
+	)
 }
 
 // Server - main control struct
@@ -35,10 +44,19 @@ func New(options *Options) (*Server, error) {
 	if options == nil {
 		return nil, ErrNoOptions
 	}
-	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("hello"))
-	})
+	bucket, err := loadbalancer.New(loadbalancer.RoundRobin)
+	if err != nil {
+		return nil, err
+	}
+	for _, target := range options.Targets {
+		trg, err := loadbalancer.NewTarget(target)
+		if err != nil {
+			return nil, err
+		}
+		bucket.AddTarget(trg)
+		log.Printf("[config] target %s added\n", target)
+	}
+
 	mux := http.NewServeMux()
 	mux.Handle("/schooner/metrics", promhttp.Handler())
 	mux.HandleFunc("/schooner/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -46,7 +64,7 @@ func New(options *Options) (*Server, error) {
 		w.Write([]byte("OK"))
 	})
 	mux.Handle("/", MiddlewareChain(
-		dummyHandler,
+		bucket,
 		AccessLog,
 	))
 	return &Server{options: options, mux: mux}, nil
@@ -58,8 +76,8 @@ func (srv *Server) Run() error {
 	serv := &http.Server{
 		Handler:        srv.mux,
 		Addr:           addr,
-		ReadTimeout:    5 * time.Second,
-		WriteTimeout:   5 * time.Second,
+		ReadTimeout:    10 * time.Second,
+		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
 	log.Printf("[httpserv] Start listening on %s\n", addr)
