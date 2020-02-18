@@ -12,7 +12,6 @@ const (
 	DefaultStrategy ProxyStrategy = "default"
 )
 
-
 // New - reverse proxy factory
 func New(strategy ProxyStrategy, addr *url.URL) Proxy {
 	switch strategy {

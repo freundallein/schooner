@@ -3,7 +3,9 @@ export PORT=8000
 export MACHINE_ID=0
 export USE_CACHE=1
 export CACHE_EXPIRE=10
-export TARGETS=http://localhost:8001;http://localhost:8002
+export MAX_CACHE_SIZE=1000000
+export MAX_CACHE_ITEM_SIZE=10000
+export TARGETS=http://localhost:8001
 export STALE_TIMEOUT=1
 
 export IMAGE_NAME=freundallein/schooner:latest
