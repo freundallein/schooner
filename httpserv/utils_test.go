@@ -31,3 +31,32 @@ func TestGetClientIPRemote(t *testing.T) {
 		t.Error("expected", expected, "got", observed)
 	}
 }
+
+func TestConstructKey(t *testing.T) {
+	uri := "test"
+	key := СonstructKey(uri)
+	if key != 18007334074686647077 {
+		t.Error("expected 18007334074686647077, got", key)
+	}
+}
+
+func TestNotCachableFalse(t *testing.T) {
+	req, err := http.NewRequest("GET", "/", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	observed := NotCachable(req)
+	if observed {
+		t.Error("expected false, got true")
+	}
+}
+func TestNotCachableTrue(t *testing.T) {
+	req, err := http.NewRequest("POST", "/", nil)
+	if err != nil {
+		t.Error(err)
+	}
+	observed := NotCachable(req)
+	if !observed {
+		t.Error("expected true, got false")
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/freundallein/schooner/cache"
 	"github.com/freundallein/schooner/corridgen"
 	"github.com/freundallein/schooner/loadbalancer"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -18,12 +19,14 @@ var (
 
 // Options - fileserver parameters
 type Options struct {
-	Port         string
-	Targets      []string
-	StaleTimeout int
-	MachineID    int
-	UseCache     int
-	CacheExpire  int
+	Port             string
+	Targets          []string
+	StaleTimeout     int
+	MachineID        int
+	UseCache         int
+	CacheExpire      int
+	MaxCacheSize     int
+	MaxCacheItemSize int
 }
 
 // String - simple representation
@@ -58,6 +61,13 @@ func New(options *Options) (*Server, error) {
 		log.Printf("[config] target %s added\n", target)
 	}
 	go bucket.RunServices(options.StaleTimeout)
+	store := cache.New(
+		cache.LimitedMapStrategy,
+		time.Duration(options.CacheExpire)*time.Second,
+		options.MaxCacheSize,
+		options.MaxCacheItemSize,
+	)
+	go store.GarbageCollect()
 	gen := corridgen.New(uint8(options.MachineID))
 
 	mux := http.NewServeMux()
@@ -66,10 +76,15 @@ func New(options *Options) (*Server, error) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("OK"))
 	})
+	middlewares := []Middleware{}
+	if options.UseCache == 1 {
+		middlewares = append(middlewares, Cache(store))
+	}
+	middlewares = append(middlewares, EnrichCorrelationID(gen))
+	middlewares = append(middlewares, AccessLog)
 	mux.Handle("/", MiddlewareChain(
 		bucket,
-		EnrichCorrelationID(gen),
-		AccessLog,
+		middlewares...,
 	))
 	return &Server{options: options, mux: mux}, nil
 }
@@ -78,11 +93,12 @@ func New(options *Options) (*Server, error) {
 func (srv *Server) Run() error {
 	addr := fmt.Sprintf("0.0.0.0:%s", srv.options.Port)
 	serv := &http.Server{
-		Handler:        srv.mux,
-		Addr:           addr,
-		ReadTimeout:    10 * time.Second,
-		WriteTimeout:   10 * time.Second,
-		MaxHeaderBytes: 1 << 20,
+		Handler:           srv.mux,
+		Addr:              addr,
+		ReadHeaderTimeout: 20 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 	log.Printf("[httpserv] Start listening on %s\n", addr)
 	err := serv.ListenAndServe()

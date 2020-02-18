@@ -30,6 +30,12 @@ const (
 
 	cacheExpireKey     = "CACHE_EXPIRE"
 	defaultCacheExpire = 60
+
+	maxCacheSizeKey     = "MAX_CACHE_SIZE"
+	defaultMaxCacheSize = 1024 * 1024 // kb
+
+	maxCacheItemSizeKey     = "MAX_CACHE_ITEM_SIZE"
+	defaultMaxCacheItemSize = 10 * 1024 // kb
 )
 
 type logWriter struct{}
@@ -90,14 +96,24 @@ func main() {
 	if err != nil {
 		log.Fatalf("[config] %s", err.Error())
 	}
+	maxCacheSize, err := getIntEnv(maxCacheSizeKey, defaultMaxCacheSize)
+	if err != nil {
+		log.Fatalf("[config] %s", err.Error())
+	}
+	maxCacheItemSize, err := getIntEnv(maxCacheItemSizeKey, defaultMaxCacheItemSize)
+	if err != nil {
+		log.Fatalf("[config] %s", err.Error())
+	}
 
 	options := &httpserv.Options{
-		Port:         port,
-		Targets:      targets,
-		StaleTimeout: staleTimeout,
-		MachineID:    machineID,
-		UseCache:     useCache,
-		CacheExpire:  cacheExpire,
+		Port:             port,
+		Targets:          targets,
+		StaleTimeout:     staleTimeout,
+		MachineID:        machineID,
+		UseCache:         useCache,
+		CacheExpire:      cacheExpire,
+		MaxCacheSize:     maxCacheSize,
+		MaxCacheItemSize: maxCacheItemSize,
 	}
 	log.Printf("[config] starting with %s\n", options)
 	srv, err := httpserv.New(options)
