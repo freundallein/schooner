@@ -9,9 +9,11 @@ type CacheStrategy string
 
 const (
 	// InfiniteMapStrategy - use simple map without any restrictions
-	// Is bad if you cache large files
+	// Is bad idea for all cases
 	InfiniteMapStrategy CacheStrategy = "infinite-map"
-	LimitedMapStrategy  CacheStrategy = "limited-map"
+	// LimitedMapStrategy - us map with limited size and limited item size
+	// No cache eviction except GC
+	LimitedMapStrategy CacheStrategy = "limited-map"
 	// TODO: LimitedLRUStrategy  CacheStrategy = "lru"
 )
 
