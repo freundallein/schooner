@@ -44,6 +44,10 @@ func (c *LimitedMapCache) Set(key uint64, item *Item) {
 		log.Println("[cache] limit exceeded", c.size, len(item.data), c.maxSize)
 		return
 	}
+	if len(item.data) == 0 {
+		log.Println("[cache] item has no data, why should we cache it?")
+		return
+	}
 	c.sizeLock.Lock()
 	c.size += len(item.data)
 	c.sizeLock.Unlock()
@@ -73,6 +77,10 @@ func (c *LimitedMapCache) GatherData(key uint64, header http.Header) {
 	}
 	if itemSize > c.maxItemSize {
 		log.Println("[cache] item is too huge: expected max", c.maxItemSize, ", got", itemSize, "for", key)
+		return
+	}
+	if itemSize == 0 {
+		log.Println("[cache] there is no content, why should we cache it?")
 		return
 	}
 	controls := strings.Split(header.Get("Cache-Control"), ",")
